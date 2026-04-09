@@ -1,0 +1,4 @@
+#!/usr/bin/with-contenv bashio
+
+bashio::log.info "Starting BudgetBakers Wallet app..."
+exec python3 /app/src/main.py
