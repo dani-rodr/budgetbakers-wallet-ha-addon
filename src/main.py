@@ -1,8 +1,11 @@
 import logging
+import os
 import signal
 import sys
 import re
 from datetime import datetime, timedelta, timezone
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src import __version__
 from src.config import configure_logging, read_config
