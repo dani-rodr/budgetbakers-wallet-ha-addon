@@ -109,7 +109,9 @@ def do_sync(client: WalletApiClient, bridge: WalletMqttBridge, config: dict, tri
         if "accounts" in config["publish"]:
             accounts_response = client.fetch_accounts()
             bridge.publish_accounts(accounts_response.payload)
-            bridge.publish_account_entities(_build_account_summaries(client, accounts_response.payload))
+            bridge.publish_account_entities(
+                _build_account_summaries(client, accounts_response.payload, config.get("balance_overrides", []))
+            )
             metadata = accounts_response.metadata
 
         if "recent_transactions" in config["publish"]:
@@ -148,7 +150,7 @@ def do_sync(client: WalletApiClient, bridge: WalletMqttBridge, config: dict, tri
                 }
             )
         return last_successful_sync_at
-def _build_account_summaries(client: WalletApiClient, accounts_payload: dict) -> list[dict]:
+def _build_account_summaries(client: WalletApiClient, accounts_payload: dict, balance_overrides: list[dict]) -> list[dict]:
     account_summaries = []
 
     for account in accounts_payload.get("accounts", []):
@@ -156,14 +158,22 @@ def _build_account_summaries(client: WalletApiClient, accounts_payload: dict) ->
         if not account_id:
             continue
 
-        account_records_response = client.fetch_account_records(account_id, _account_history_start(account))
+        balance_override = _find_balance_override(account, balance_overrides)
+        history_start = _account_history_start(account)
+        records_start = balance_override["as_of"] if balance_override else history_start
+        account_records_response = client.fetch_account_records(account_id, records_start)
         records = account_records_response.payload.get("records", [])
         initial_balance = _get_initial_balance_value(account)
         currency_code = _get_currency_code(account, records)
         balance = None
         balance_source = "unknown"
+        balance_as_of = None
 
-        if initial_balance is not None or records:
+        if balance_override:
+            balance = balance_override["starting_balance"] + sum(_record_amount(record) for record in _records_after(records, balance_override["as_of"]))
+            balance_source = "override"
+            balance_as_of = balance_override["as_of"]
+        elif initial_balance is not None or records:
             balance = (initial_balance or 0.0) + sum(_record_amount(record) for record in records)
             balance_source = "derived"
 
@@ -181,6 +191,7 @@ def _build_account_summaries(client: WalletApiClient, accounts_payload: dict) ->
                 "balance": round(balance, 2) if balance is not None else None,
                 "currencyCode": currency_code,
                 "balanceSource": balance_source,
+                "balanceAsOf": balance_as_of,
                 "fetchedAt": accounts_payload.get("fetchedAt"),
             }
         )
@@ -200,6 +211,19 @@ def _account_history_start(account: dict) -> str | None:
     return account.get("recordStats", {}).get("recordDate", {}).get("min")
 
 
+def _find_balance_override(account: dict, balance_overrides: list[dict]) -> dict | None:
+    account_id = account.get("id")
+    account_name = account.get("name")
+
+    for item in balance_overrides:
+        if item.get("account_id") and item["account_id"] == account_id:
+            return item
+        if item.get("account_name") and item["account_name"] == account_name:
+            return item
+
+    return None
+
+
 def _get_currency_code(account: dict, records: list[dict]) -> str | None:
     for key in ("initialBalance", "initialBaseBalance"):
         value = account.get(key, {}).get("currencyCode")
@@ -217,6 +241,10 @@ def _get_currency_code(account: dict, records: list[dict]) -> str | None:
 def _record_amount(record: dict) -> float:
     value = record.get("amount", {}).get("value")
     return float(value) if isinstance(value, (int, float)) else 0.0
+
+
+def _records_after(records: list[dict], as_of: str) -> list[dict]:
+    return [record for record in records if (record.get("recordDate") or "") > as_of]
 
 
 def _max_record_date(records: list[dict]) -> str | None:

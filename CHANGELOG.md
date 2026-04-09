@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3
+
+- Add configurable per-account balance overrides based on a known balance at a specific timestamp.
+
 ## 0.1.2
 
 - Fix account balance derivation to fetch full account history with exact account filters.

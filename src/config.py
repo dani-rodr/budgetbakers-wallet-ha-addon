@@ -9,6 +9,7 @@ DEFAULT_CONFIG = {
     "poll_interval_minutes": 15,
     "mqtt_topic_prefix": "wallet_budgetbakers",
     "recent_transactions_limit": 10,
+    "balance_overrides": [],
     "publish": ["accounts", "recent_transactions", "status"],
     "log_level": "info",
     "mqtt_host": None,
@@ -30,6 +31,7 @@ def read_config() -> dict:
         config["poll_interval_minutes"] = int(options.get("poll_interval_minutes", config["poll_interval_minutes"]))
         config["mqtt_topic_prefix"] = options.get("mqtt_topic_prefix", config["mqtt_topic_prefix"])
         config["recent_transactions_limit"] = int(options.get("recent_transactions_limit", config["recent_transactions_limit"]))
+        config["balance_overrides"] = _normalize_balance_overrides(options.get("balance_overrides", config["balance_overrides"]))
         config["publish"] = options.get("publish", config["publish"])
         config["log_level"] = options.get("log_level", config["log_level"])
 
@@ -65,6 +67,49 @@ def configure_logging(log_level: str) -> None:
         format="%(asctime)s [%(levelname)s] %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+
+
+def _normalize_balance_overrides(raw_overrides: list[dict] | None) -> list[dict]:
+    if not raw_overrides:
+        return []
+
+    normalized = []
+    for index, item in enumerate(raw_overrides, start=1):
+        if not isinstance(item, dict):
+            raise RuntimeError(f"Configuration value 'balance_overrides[{index}]' must be an object")
+
+        account_id = _optional_string(item.get("account_id"))
+        account_name = _optional_string(item.get("account_name") or item.get("account"))
+        if not account_id and not account_name:
+            raise RuntimeError(
+                f"Configuration value 'balance_overrides[{index}]' requires 'account_id' or 'account_name'"
+            )
+
+        starting_balance = item.get("starting_balance")
+        if not isinstance(starting_balance, (int, float)):
+            raise RuntimeError(f"Configuration value 'balance_overrides[{index}].starting_balance' must be numeric")
+
+        as_of = _optional_string(item.get("as_of"))
+        if not as_of:
+            raise RuntimeError(f"Configuration value 'balance_overrides[{index}].as_of' is required")
+
+        normalized.append(
+            {
+                "account_id": account_id,
+                "account_name": account_name,
+                "starting_balance": float(starting_balance),
+                "as_of": as_of,
+            }
+        )
+
+    return normalized
+
+
+def _optional_string(value) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 def _get_mqtt_from_supervisor() -> dict:

@@ -1,5 +1,5 @@
 name: BudgetBakers Wallet
-version: "0.1.2"
+version: "0.1.3"
 slug: budgetbakers-wallet
 description: Polls BudgetBakers Wallet REST data and publishes it to Home Assistant via MQTT auto-discovery.
 url: "https://github.com/dani-rodr/budgetbakers-wallet-ha-addon"
@@ -16,6 +16,7 @@ options:
   poll_interval_minutes: 15
   mqtt_topic_prefix: wallet_budgetbakers
   recent_transactions_limit: 10
+  balance_overrides: []
   publish:
     - accounts
     - recent_transactions
@@ -26,6 +27,11 @@ schema:
   poll_interval_minutes: int(1,1440)
   mqtt_topic_prefix: str
   recent_transactions_limit: int(1,200)
+  balance_overrides:
+    - account_id: str?
+      account_name: str?
+      starting_balance: float
+      as_of: str
   publish:
     - str
   log_level: list(debug|info|warning|error)
