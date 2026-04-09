@@ -156,15 +156,15 @@ def _build_account_summaries(client: WalletApiClient, accounts_payload: dict) ->
         if not account_id:
             continue
 
-        account_records_response = client.fetch_account_records(account_id)
+        account_records_response = client.fetch_account_records(account_id, _account_history_start(account))
         records = account_records_response.payload.get("records", [])
         initial_balance = _get_initial_balance_value(account)
         currency_code = _get_currency_code(account, records)
         balance = None
         balance_source = "unknown"
 
-        if initial_balance is not None:
-            balance = initial_balance + sum(_record_amount(record) for record in records)
+        if initial_balance is not None or records:
+            balance = (initial_balance or 0.0) + sum(_record_amount(record) for record in records)
             balance_source = "derived"
 
         friendly_name = account.get("name") or account_id
@@ -194,6 +194,10 @@ def _get_initial_balance_value(account: dict) -> float | None:
         if isinstance(value, (int, float)):
             return float(value)
     return None
+
+
+def _account_history_start(account: dict) -> str | None:
+    return account.get("recordStats", {}).get("recordDate", {}).get("min")
 
 
 def _get_currency_code(account: dict, records: list[dict]) -> str | None:

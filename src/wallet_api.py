@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import requests
 
@@ -74,32 +74,34 @@ class WalletApiClient:
             metadata=metadata,
         )
 
-    def fetch_account_records(self, account_id: str) -> WalletResponse:
+    def fetch_account_records(self, account_id: str, start_record_date: str | None = None) -> WalletResponse:
         records = []
-        offset = 0
         metadata = None
 
-        while True:
-            response = self._session.get(
-                f"{self._base_url}/records",
-                params={
-                    "limit": 200,
-                    "offset": offset,
-                    "accountId": f"eq.{account_id}",
-                    "agentHints": "true",
-                },
-                timeout=30,
-            )
-            response.raise_for_status()
-            data = response.json()
-            records.extend(data.get("records", []))
-            metadata = self._metadata_from_response(response)
+        for params in self._account_record_queries(account_id, start_record_date):
+            offset = 0
 
-            next_offset = data.get("nextOffset")
-            if next_offset is None:
-                break
+            while True:
+                response = self._session.get(
+                    f"{self._base_url}/records",
+                    params=params
+                    + [
+                        ("limit", "200"),
+                        ("offset", str(offset)),
+                        ("agentHints", "true"),
+                    ],
+                    timeout=30,
+                )
+                response.raise_for_status()
+                data = response.json()
+                records.extend(data.get("records", []))
+                metadata = self._metadata_from_response(response)
 
-            offset = int(next_offset)
+                next_offset = data.get("nextOffset")
+                if next_offset is None:
+                    break
+
+                offset = int(next_offset)
 
         return WalletResponse(
             payload={
@@ -109,6 +111,28 @@ class WalletApiClient:
             },
             metadata=metadata or {},
         )
+
+    def _account_record_queries(self, account_id: str, start_record_date: str | None) -> list[list[tuple[str, str]]]:
+        base_params = [("accountId", account_id)]
+        if not start_record_date:
+            return [base_params]
+
+        query_windows = []
+        window_start = _parse_api_timestamp(start_record_date).date()
+        window_end = datetime.now(timezone.utc).date() + timedelta(days=1)
+
+        while window_start < window_end:
+            next_window_end = min(window_start + timedelta(days=370), window_end)
+            query_windows.append(
+                base_params
+                + [
+                    ("recordDate", f"gte.{window_start.isoformat()}"),
+                    ("recordDate", f"lt.{next_window_end.isoformat()}"),
+                ]
+            )
+            window_start = next_window_end
+
+        return query_windows
 
     @staticmethod
     def _metadata_from_response(response: requests.Response) -> dict:
@@ -123,6 +147,10 @@ class WalletApiClient:
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _parse_api_timestamp(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
 def _to_int(value: str | None) -> int | None:
