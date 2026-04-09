@@ -1,0 +1,9 @@
+build_from:
+  amd64: "ghcr.io/home-assistant/amd64-base-python:3.12-alpine3.20"
+  aarch64: "ghcr.io/home-assistant/aarch64-base-python:3.12-alpine3.20"
+  armv7: "ghcr.io/home-assistant/armv7-base-python:3.12-alpine3.20"
+labels:
+  org.opencontainers.image.title: "Home Assistant Add-on: BudgetBakers Wallet"
+  org.opencontainers.image.description: "Polls BudgetBakers Wallet REST API and publishes to MQTT"
+  org.opencontainers.image.source: "https://github.com/dani-rodr/budgetbakers-wallet-ha-addon"
+  org.opencontainers.image.licenses: "MIT"
