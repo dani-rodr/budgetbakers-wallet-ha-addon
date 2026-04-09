@@ -1,5 +1,5 @@
 name: BudgetBakers Wallet
-version: "0.1.1"
+version: "0.1.2"
 slug: budgetbakers-wallet
 description: Polls BudgetBakers Wallet REST data and publishes it to Home Assistant via MQTT auto-discovery.
 url: "https://github.com/dani-rodr/budgetbakers-wallet-ha-addon"
